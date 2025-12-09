@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:csv/csv.dart'; // ✅ مكتبة CSV بدلاً من Excel 
+import 'package:csv/csv.dart'; 
 
 import '../ai/service.dart';
 import '../data/manager.dart';
