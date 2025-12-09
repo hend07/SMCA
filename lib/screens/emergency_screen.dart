@@ -15,7 +15,7 @@ class EmergencyScreen extends StatefulWidget {
 
 class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProviderStateMixin {
   bool isActive = false;
-  String selectedCode = ""; // سيتم تحديدها عند ضغط الزر
+  String selectedCode = ""; 
   final TextEditingController roomController = TextEditingController();
   final TextEditingController hrController = TextEditingController();
   final TextEditingController bpController = TextEditingController();
@@ -25,7 +25,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
   String elapsedTime = "00:00";
   List<Doctor> responders = [];
 
-  // بيانات الأكواد والألوان الخاصة بها
   final Map<String, Color> _codeColors = {
     "Trauma Code": Colors.orange.shade800,
     "Code Blue": Colors.blue.shade800,
@@ -96,12 +95,75 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
     super.dispose();
   }
 
+  // ✅ دالة إرسال SMS الجماعية (المعدلة)
   Future<void> sendAutoSMS(List<Doctor> docs) async {
     if (docs.isEmpty) return;
-    String phones = docs.map((d) => d.phone).join(',');
+    
+    // 1. تصفية الأرقام الفارغة وتنظيفها
+    List<String> phones = docs
+        .where((d) => d.phone.isNotEmpty)
+        .map((d) => d.phone.trim())
+        .toList();
+        
+    if (phones.isEmpty) return;
+
+    // نص الرسالة
     String message = "🚨 Code: $selectedCode\nLocation: ${roomController.text}\nURGENT RESPONSE REQUIRED!";
-    final Uri smsUri = Uri(scheme: 'sms', path: phones, queryParameters: <String, String>{'body': message});
-    if (await canLaunchUrl(smsUri)) await launchUrl(smsUri);
+    String encodedMessage = Uri.encodeComponent(message);
+
+    try {
+      // 2. محاولة 1: إرسال جماعي (يعمل غالباً على أندرويد)
+      // الفاصل يعتمد على النظام، سنحاول استخدام الفاصلة لأنها الأكثر شيوعاً في الموبايل
+      String separator = (Theme.of(context).platform == TargetPlatform.android) ? ',' : '&'; 
+      String recipients = phones.join(separator);
+      
+      final Uri smsUri = Uri.parse('sms:$recipients?body=$encodedMessage');
+      
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri);
+      } else {
+        throw 'Could not launch group SMS';
+      }
+    } catch (e) {
+      // 3. محاولة 2: إذا فشل الجماعي، نعرض قائمة للمستخدم ليختار إرسال فردي
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("⚠️ Group SMS Failed"),
+            content: SizedBox(
+              height: 200,
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("System restricted auto-group SMS. Please notify team manually:"),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        return ListTile(
+                          leading: const Icon(Icons.message, color: Colors.blue),
+                          title: Text(docs[index].name),
+                          subtitle: Text(docs[index].phone),
+                          onTap: () async {
+                             final Uri singleSms = Uri.parse('sms:${docs[index].phone}?body=$encodedMessage');
+                             if (await canLaunchUrl(singleSms)) await launchUrl(singleSms);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
+          ),
+        );
+      }
+    }
   }
 
   Future<void> makeCall(String phone) async {
@@ -151,6 +213,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
       });
     });
 
+    // استدعاء دالة الإرسال الجماعي المعدلة
     sendAutoSMS(responders);
   }
 
@@ -234,7 +297,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 20),
-                // 1. حقل الموقع (الأهم)
                 TextField(
                   controller: roomController,
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
@@ -257,9 +319,8 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                 ),
                 const SizedBox(height: 20),
 
-                // 2. شبكة الأزرار (4 أزرار كبيرة)
                 SizedBox(
-                  height: 350, // ارتفاع مناسب للأزرار
+                  height: 350, 
                   child: Column(
                     children: [
                       Expanded(
@@ -287,7 +348,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
         ),
       );
     } else {
-      // ✅ صفحة الطوارئ النشطة (لم تتغير كثيراً لكن تم ربط الألوان)
       return Scaffold(
         appBar: AppBar(
           title: const Text("🚨 ACTIVE EMERGENCY", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -306,7 +366,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: _codeColors[selectedCode], // لون ديناميكي حسب الكود
+                      color: _codeColors[selectedCode],
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [BoxShadow(color: _codeColors[selectedCode]!.withOpacity(0.5), blurRadius: 15, spreadRadius: 2)],
                     ),
@@ -325,7 +385,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                   ),
                 ),
                 const SizedBox(height: 20),
-                // (باقي الكود للصفحة النشطة كما هو: التبويبات والقوائم)
                 DefaultTabController(
                   length: 2,
                   child: Column(
@@ -344,7 +403,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                         height: 400,
                         child: TabBarView(
                           children: [
-                            // Team Tab
                             Column(
                               children: [
                                 Expanded(
@@ -407,7 +465,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                                 )
                               ],
                             ),
-                            // Checklist Tab
                             ListView(
                               children: [
                                 ..._currentChecklistState.keys.map((key) {
