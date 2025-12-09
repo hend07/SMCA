@@ -1,0 +1,23 @@
+# Build / IDE / tool folders
+.dart_tool/
+build/
+.packages
+.pub/
+.idea/
+.vscode/
+
+# Flutter / Dart generated
+/flutter_*.png
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# macOS
+.DS_Store
+
+# Editor backups
+*.swp
+*~
+
+# Sensitive / local config
+.env
