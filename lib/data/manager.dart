@@ -9,10 +9,50 @@ class DataManager {
 
   // البيانات
   static List<Doctor> doctors = [
-    Doctor(name: "Dr. Ahmed", role: "Consultant", phone: "0590123456", status: "On Call", lastUpdate: "07:00", department: "ER", date: todayDate, day: todayDay, coverage: "12h"),
-    Doctor(name: "Dr. Khalid", role: "Specialist", phone: "0500000000", status: "On Call", lastUpdate: "08:00", department: "Surgery", date: todayDate, day: todayDay, coverage: "24h"),
-    Doctor(name: "Dr. Sara", role: "Resident", phone: "0555555555", status: "On Call", lastUpdate: "07:30", department: "ICU", date: todayDate, day: todayDay, coverage: "24h"),
-    Doctor(name: "Dr. Nada", role: "Tech", phone: "0544444444", status: "On Call", lastUpdate: "08:15", department: "Radiology", date: todayDate, day: todayDay, coverage: "12h"),
+    Doctor(
+      name: "Dr. Ahmed", 
+      role: "Resident", 
+      phone: "0555123456", 
+      status: "Day Shift", 
+      lastUpdate: "07:30", 
+      department: "ER",
+      date: todayDate,
+      day: todayDay,
+      coverage: "12h"
+    ),
+    Doctor(
+      name: "Dr. Khalid", 
+      role: "Specialist", 
+      phone: "0500000000", 
+      status: "On Call", 
+      lastUpdate: "08:00", 
+      department: "Surgery",
+      date: todayDate,
+      day: todayDay,
+      coverage: "24h"
+    ),
+    Doctor(
+      name: "Dr. Sara", 
+      role: "Resident", 
+      phone: "0555555555", 
+      status: "Night Shift", 
+      lastUpdate: "19:30", 
+      department: "ICU",
+      date: todayDate,
+      day: todayDay,
+      coverage: "24h"
+    ),
+    Doctor(
+      name: "Dr. Nada", 
+      role: "Technician", 
+      phone: "0544444444", 
+      status: "Evening Shift", 
+      lastUpdate: "14:00", 
+      department: "Radiology",
+      date: todayDate,
+      day: todayDay,
+      coverage: "12h"
+    ),
   ];
 
   static List<CaseLog> logs = [];

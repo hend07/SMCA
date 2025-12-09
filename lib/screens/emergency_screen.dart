@@ -15,7 +15,7 @@ class EmergencyScreen extends StatefulWidget {
 
 class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProviderStateMixin {
   bool isActive = false;
-  String selectedCode = ""; // سيتم تحديدها عند ضغط الزر
+  String selectedCode = ""; 
   final TextEditingController roomController = TextEditingController();
   final TextEditingController hrController = TextEditingController();
   final TextEditingController bpController = TextEditingController();
@@ -25,7 +25,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
   String elapsedTime = "00:00";
   List<Doctor> responders = [];
 
-  // بيانات الأكواد والألوان الخاصة بها
   final Map<String, Color> _codeColors = {
     "Trauma Code": Colors.orange.shade800,
     "Code Blue": Colors.blue.shade800,
@@ -96,12 +95,64 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
     super.dispose();
   }
 
+  // ✅ دالة إرسال SMS الجماعية
   Future<void> sendAutoSMS(List<Doctor> docs) async {
     if (docs.isEmpty) return;
-    String phones = docs.map((d) => d.phone).join(',');
+    
+    List<String> phones = docs.where((d) => d.phone.isNotEmpty).map((d) => d.phone.trim()).toList();
+    if (phones.isEmpty) return;
+
     String message = "🚨 Code: $selectedCode\nLocation: ${roomController.text}\nURGENT RESPONSE REQUIRED!";
-    final Uri smsUri = Uri(scheme: 'sms', path: phones, queryParameters: <String, String>{'body': message});
-    if (await canLaunchUrl(smsUri)) await launchUrl(smsUri);
+    String encodedMessage = Uri.encodeComponent(message);
+
+    try {
+      String separator = (Theme.of(context).platform == TargetPlatform.android) ? ',' : '&'; 
+      String recipients = phones.join(separator);
+      final Uri smsUri = Uri.parse('sms:$recipients?body=$encodedMessage');
+      
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri);
+      } else {
+        throw 'Could not launch group SMS';
+      }
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("⚠️ Group SMS Failed"),
+            content: SizedBox(
+              height: 200,
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("Tap below to notify team manually:"),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        return ListTile(
+                          leading: const Icon(Icons.message, color: Colors.blue),
+                          title: Text(docs[index].name),
+                          onTap: () async {
+                             final Uri singleSms = Uri.parse('sms:${docs[index].phone}?body=$encodedMessage');
+                             if (await canLaunchUrl(singleSms)) await launchUrl(singleSms);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
+          ),
+        );
+      }
+    }
   }
 
   Future<void> makeCall(String phone) async {
@@ -109,7 +160,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
     if (await canLaunchUrl(callUri)) await launchUrl(callUri);
   }
 
-  // ✅ دالة البدء تستقبل الكود الآن كمعامل
+  // 🔥🔥🔥 دالة البدء المعدلة (المنطق الجديد للوقت) 🔥🔥🔥
   void startEmergency(String codeType) {
     if (roomController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -120,10 +171,11 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
     }
 
     setState(() {
-      selectedCode = codeType; // تعيين الكود المختار
+      selectedCode = codeType;
       isActive = true;
       startTime = DateTime.now();
 
+      // 1. تحديد الأقسام المستهدفة
       List<String> targetDepts = [];
       switch (selectedCode) {
         case "Trauma Code": targetDepts = ["Surgery", "Orthopedics", "ICU", "ER", "Radiology"]; break;
@@ -133,16 +185,66 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
         default: targetDepts = ["ER"];
       }
 
-      responders = DataManager.doctors.where((d) =>
-        targetDepts.contains(d.department) && (d.status.contains("On") || d.status.contains("Shift"))
-      ).toList();
+      final now = DateTime.now();
+      final String todayDateStr = intl.DateFormat('yyyy-MM-dd').format(now);
+      // فورمات لتحليل الوقت مثل "07:30 PM"
+      final timeFormat = intl.DateFormat("hh:mm a"); 
 
+      // 2. فلترة الأطباء
+      responders = DataManager.doctors.where((d) {
+        // أ. القسم + الحالة (Off مستبعد)
+        if (!targetDepts.contains(d.department)) return false;
+        if (d.status.toLowerCase().contains("off")) return false;
+
+        // ب. مطابقة التاريخ (إذا كان الحقل ممتلئاً)
+        if (d.date.isNotEmpty && d.date != todayDateStr) return false;
+
+        // ج. مطابقة نطاق الوقت (Coverage Range)
+        // نتوقع الصيغة: "07:30 AM - 07:30 PM"
+        if (d.coverage.isEmpty || !d.coverage.contains("-")) return false;
+
+        try {
+          final parts = d.coverage.split('-');
+          if (parts.length != 2) return false;
+
+          String startStr = parts[0].trim(); // "07:30 AM"
+          String endStr = parts[1].trim();   // "07:30 PM"
+
+          // تحويل النصوص إلى DateTime لليوم الحالي
+          DateTime tStart = timeFormat.parse(startStr);
+          DateTime tEnd = timeFormat.parse(endStr);
+
+          // تركيب الوقت على تاريخ اليوم الحالي
+          DateTime startShift = DateTime(now.year, now.month, now.day, tStart.hour, tStart.minute);
+          DateTime endShift = DateTime(now.year, now.month, now.day, tEnd.hour, tEnd.minute);
+
+          // التعامل مع المناوبات الليلية (عندما يكون الانتهاء قبل البدء، مثل 7م إلى 7ص)
+          if (endShift.isBefore(startShift)) {
+            // المناوبة تعبر منتصف الليل
+            // نكون ضمن المناوبة إذا كان الوقت الحالي بعد البداية OR قبل النهاية
+            if (now.isAfter(startShift) || now.isBefore(endShift)) {
+              return true;
+            }
+            return false;
+          } else {
+            // المناوبة النهارية العادية (في نفس اليوم)
+            // نكون ضمن المناوبة إذا كان الوقت الحالي بين البداية والنهاية
+            return now.isAfter(startShift) && now.isBefore(endShift);
+          }
+        } catch (e) {
+          debugPrint("Error parsing coverage time for ${d.name}: $e");
+          return false; // إذا كان التنسيق خطأ لا نستدعيه
+        }
+      }).toList();
+
+      // إعادة تهيئة قوائم التحقق
       _currentChecklistState.clear();
       for (var item in _checklistsData[selectedCode] ?? []) {
         _currentChecklistState[item] = false;
       }
     });
 
+    // تشغيل المؤقت
     timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       final now = DateTime.now();
       final diff = now.difference(startTime!);
@@ -181,7 +283,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Code ended & Log saved")));
   }
 
-  // 🎨 ودجت للأزرار الكبيرة
   Widget _buildCodeButton(String codeTitle) {
     return Expanded(
       child: InkWell(
@@ -234,7 +335,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 20),
-                // 1. حقل الموقع (الأهم)
                 TextField(
                   controller: roomController,
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
@@ -257,9 +357,8 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                 ),
                 const SizedBox(height: 20),
 
-                // 2. شبكة الأزرار (4 أزرار كبيرة)
                 SizedBox(
-                  height: 350, // ارتفاع مناسب للأزرار
+                  height: 350, 
                   child: Column(
                     children: [
                       Expanded(
@@ -287,7 +386,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
         ),
       );
     } else {
-      // ✅ صفحة الطوارئ النشطة (لم تتغير كثيراً لكن تم ربط الألوان)
       return Scaffold(
         appBar: AppBar(
           title: const Text("🚨 ACTIVE EMERGENCY", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -306,7 +404,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: _codeColors[selectedCode], // لون ديناميكي حسب الكود
+                      color: _codeColors[selectedCode],
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [BoxShadow(color: _codeColors[selectedCode]!.withOpacity(0.5), blurRadius: 15, spreadRadius: 2)],
                     ),
@@ -325,7 +423,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                   ),
                 ),
                 const SizedBox(height: 20),
-                // (باقي الكود للصفحة النشطة كما هو: التبويبات والقوائم)
                 DefaultTabController(
                   length: 2,
                   child: Column(
@@ -344,12 +441,11 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                         height: 400,
                         child: TabBarView(
                           children: [
-                            // Team Tab
                             Column(
                               children: [
                                 Expanded(
                                   child: responders.isEmpty 
-                                    ? const Center(child: Text("No responders found for this code type in roster."))
+                                    ? const Center(child: Text("No active responders found for this time."))
                                     : ListView.builder(
                                     itemCount: responders.length,
                                     itemBuilder: (context, index) {
@@ -361,7 +457,8 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                                           dense: true,
                                           leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.check, color: Colors.white, size: 16)),
                                           title: Text(doc.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                          subtitle: Text("${doc.role} - ${doc.department}"),
+                                          subtitle: Text("${doc.role} - ${doc.department}\nTime: ${doc.coverage}"), // يظهر وقت مناوبته
+                                          isThreeLine: true,
                                           trailing: IconButton(
                                             onPressed: () => makeCall(doc.phone),
                                             icon: const Icon(Icons.call, color: Colors.blue),
@@ -371,6 +468,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                                     },
                                   ),
                                 ),
+                                // ... (بقية الكود الخاص بالدعم الإضافي والتشيك ليست)
                                 const Divider(thickness: 2),
                                 Container(
                                   padding: const EdgeInsets.all(10),
@@ -407,7 +505,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                                 )
                               ],
                             ),
-                            // Checklist Tab
                             ListView(
                               children: [
                                 ..._currentChecklistState.keys.map((key) {

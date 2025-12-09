@@ -1,10 +1,9 @@
 import 'dart:convert';
-import 'dart:html' as html; // ✅ مكتبة الويب الضرورية للتنزيل
+import 'dart:html' as html; 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 
-// تأكد من صحة مسارات الملفات في مشروعك
 import '../data/manager.dart';
 import '../models.dart';
 
@@ -25,7 +24,6 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
     _tabController = TabController(length: departments.length, vsync: this);
   }
 
-  // 🧠 دالة توحيد أسماء الأقسام
   String _normalizeDeptName(String rawName) {
     String lower = rawName.toLowerCase().trim();
     if (lower.contains("emergency") || lower == "er" || lower.startsWith("er ") || lower.contains("طوارئ")) {
@@ -43,26 +41,19 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
     return rawName; 
   }
 
-  // 📂 دالة الرفع (معدلة لتعمل بامتياز مع الويب باستخدام Bytes)
   Future<void> _uploadCSV() async {
     try {
-      // withData: true مهم جداً للويب ليقرأ البيانات مباشرة
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom, allowedExtensions: ['csv', 'txt', 'tsv'], withData: true,
       );
 
       if (result != null) {
-        // التحقق من وجود بيانات (Bytes)
-        if (result.files.single.bytes == null) {
-          throw "تعذر قراءة بيانات الملف";
-        }
+        if (result.files.single.bytes == null) throw "تعذر قراءة بيانات الملف";
 
         String fileContent;
         try {
-          // محاولة فك الترميز بـ UTF-8
           fileContent = utf8.decode(result.files.single.bytes!);
         } catch (e) {
-          // محاولة بديلة لترميز الويندوز العربي (Latin1)
           fileContent = latin1.decode(result.files.single.bytes!);
         }
 
@@ -73,7 +64,6 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
         List<List<dynamic>> rows = CsvToListConverter(fieldDelimiter: delimiter, shouldParseNumbers: false).convert(fileContent);
         if (rows.isEmpty) throw "الملف فارغ";
 
-        // تحديد الأعمدة
         List<String> headers = rows[0].map((e) => e.toString().toLowerCase().trim()).toList();
         
         int nameIdx = headers.indexWhere((h) => h.contains('name'));
@@ -100,7 +90,6 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
         for (var i = 1; i < rows.length; i++) {
           var row = rows[i];
           if (row.length < 2) continue;
-
           String getVal(int idx) => (idx >= 0 && idx < row.length) ? row[idx].toString().trim() : "";
           
           String rawName = getVal(nameIdx);
@@ -108,13 +97,11 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
 
           if (rawName.isNotEmpty) {
              if (rawDept.isEmpty) rawDept = departments[_tabController.index];
-
              String normalizedDept = _normalizeDeptName(rawDept);
              DataManager.addDoctor(normalizedDept, rawName);
 
              try {
                 var doc = DataManager.doctors.lastWhere((d) => d.name == rawName && d.department == normalizedDept);
-                
                 String r = getVal(roleIdx); if(r.isNotEmpty) doc.role = r;
                 String p = getVal(phoneIdx); if(p.isNotEmpty) doc.phone = p;
                 String s = getVal(statusIdx); if(s.isNotEmpty) doc.status = s;
@@ -122,7 +109,6 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
                 String dt = getVal(dateIdx); if(dt.isNotEmpty) doc.date = dt;
                 String dy = getVal(dayIdx); if(dy.isNotEmpty) doc.day = dy;
                 String c = getVal(covIdx); if(c.isNotEmpty) doc.coverage = c;
-
              } catch (e) {/*ignore*/}
              count++;
           }
@@ -135,43 +121,33 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
     }
   }
 
-  // 💾 دالة التنزيل (معدلة للويب باستخدام dart:html)
   void _downloadCSV() {
     try {
       if (DataManager.doctors.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No data to export"), backgroundColor: Colors.orange));
         return;
       }
-
-      // بناء محتوى CSV
       List<List<dynamic>> rows = [];
       rows.add(["Name", "Role", "Phone", "Status", "Last Update", "Department", "Date", "Day", "Coverage"]);
       for (var doc in DataManager.doctors) {
         rows.add([doc.name, doc.role, doc.phone, doc.status, doc.lastUpdate, doc.department, doc.date, doc.day, doc.coverage]);
       }
       String csvData = const ListToCsvConverter().convert(rows);
-
-      // ✅ كود التنزيل الخاص بالويب (نفس فكرة LogsScreen)
-      // إضافة BOM (\uFEFF) لضمان ظهور العربي بشكل صحيح في Excel
       final bytes = utf8.encode('\uFEFF$csvData'); 
       final blob = html.Blob([bytes]);
       final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
+      html.AnchorElement(href: url)
         ..setAttribute("download", "Roster_Export.csv")
         ..click();
-      
       html.Url.revokeObjectUrl(url);
-
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Roster downloaded successfully"), backgroundColor: Colors.green));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Export Error: $e"), backgroundColor: Colors.red));
     }
   }
 
-  // ➕ دالة الإضافة اليدوية (الميزة الجديدة)
   void _showManualAddDialog() {
     final _formKey = GlobalKey<FormState>();
-    
     String selectedDept = departments[_tabController.index];
     TextEditingController nameCtrl = TextEditingController();
     TextEditingController roleCtrl = TextEditingController();
@@ -204,6 +180,27 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
                   validator: (v) => v!.isEmpty ? "Required" : null,
                 ),
                 const SizedBox(height: 10),
+                // ✅ تعديل هنا: خيارات جاهزة للوقت
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(labelText: "Shift Coverage", border: OutlineInputBorder()),
+                  hint: const Text("Select Time Range"),
+                  items: const [
+                    DropdownMenuItem(value: "07:30 AM - 07:30 PM", child: Text("Day (7:30 AM - 7:30 PM)")),
+                    DropdownMenuItem(value: "07:30 PM - 07:30 AM", child: Text("Night (7:30 PM - 7:30 AM)")),
+                    DropdownMenuItem(value: "08:00 AM - 04:00 PM", child: Text("Morning (8:00 AM - 4:00 PM)")),
+                    DropdownMenuItem(value: "Custom", child: Text("Custom Time...")),
+                  ],
+                  onChanged: (val) {
+                    if (val != "Custom") covCtrl.text = val!;
+                    else covCtrl.clear();
+                  },
+                ),
+                const SizedBox(height: 5),
+                TextFormField(
+                  controller: covCtrl, 
+                  decoration: const InputDecoration(labelText: "Time Range (Text)", hintText: "e.g. 09:00 AM - 05:00 PM", border: OutlineInputBorder())
+                ),
+                const SizedBox(height: 10),
                 TextFormField(controller: roleCtrl, decoration: const InputDecoration(labelText: "Role", border: OutlineInputBorder())),
                 const SizedBox(height: 10),
                 TextFormField(controller: phoneCtrl, decoration: const InputDecoration(labelText: "Phone", border: OutlineInputBorder()), keyboardType: TextInputType.phone),
@@ -213,8 +210,6 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
                 TextFormField(controller: dateCtrl, decoration: const InputDecoration(labelText: "Date", border: OutlineInputBorder())),
                 const SizedBox(height: 10),
                 TextFormField(controller: dayCtrl, decoration: const InputDecoration(labelText: "Day", border: OutlineInputBorder())),
-                const SizedBox(height: 10),
-                TextFormField(controller: covCtrl, decoration: const InputDecoration(labelText: "Coverage", border: OutlineInputBorder())),
               ],
             ),
           ),
@@ -233,7 +228,7 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
                     doc.status = statusCtrl.text;
                     doc.date = dateCtrl.text;
                     doc.day = dayCtrl.text;
-                    doc.coverage = covCtrl.text;
+                    doc.coverage = covCtrl.text; // سيأخذ النص المكتوب (07:30 AM - ...)
                     doc.lastUpdate = DateTime.now().toString().split(' ')[0];
                   } catch (e) {
                      print("Error updating new doc: $e");
@@ -250,15 +245,32 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
     );
   }
 
-  // ✏️ دالة التعديل السريع
+  // ✏️ تعديل الخلية
   void _editCell(Doctor doc, String fieldName, String currentValue) {
     TextEditingController ctrl = TextEditingController(text: currentValue);
     showDialog(context: context, builder: (c) => AlertDialog(
       title: Text("Edit $fieldName"),
-      content: TextField(
-        controller: ctrl, 
-        autofocus: true,
-        decoration: InputDecoration(border: const OutlineInputBorder(), hintText: "Enter new $fieldName"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ✅ إضافة أزرار مساعدة للوقت
+          if (fieldName == 'Coverage') ...[
+             Wrap(
+               spacing: 5,
+               children: [
+                 ActionChip(label: const Text("Day"), onPressed: () => ctrl.text = "07:30 AM - 07:30 PM"),
+                 ActionChip(label: const Text("Night"), onPressed: () => ctrl.text = "07:30 PM - 07:30 AM"),
+                 ActionChip(label: const Text("Office"), onPressed: () => ctrl.text = "08:00 AM - 04:00 PM"),
+               ],
+             ),
+             const SizedBox(height: 10),
+          ],
+          TextField(
+            controller: ctrl, 
+            autofocus: true,
+            decoration: InputDecoration(border: const OutlineInputBorder(), hintText: "Enter new $fieldName"),
+          ),
+        ],
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(c), child: const Text("Cancel")),
@@ -322,7 +334,7 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
             DataColumn(label: Text('Dept')),
             DataColumn(label: Text('Date')),
             DataColumn(label: Text('Day')),
-            DataColumn(label: Text('Coverage')),
+            DataColumn(label: Text('Coverage (Time)')), // ✅ تعديل الاسم هنا
           ],
           rows: docs.map((doc) => DataRow(cells: [
             DataCell(Text(doc.name, style: const TextStyle(fontWeight: FontWeight.bold)), onTap: () => _editCell(doc, 'Name', doc.name)),
