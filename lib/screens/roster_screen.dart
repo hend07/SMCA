@@ -1,8 +1,10 @@
 import 'dart:convert';
-import 'dart:html' as html; 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../data/manager.dart';
 import '../models.dart';
@@ -121,7 +123,7 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
     }
   }
 
-  void _downloadCSV() {
+  Future<void> _downloadCSV() async {
     try {
       if (DataManager.doctors.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No data to export"), backgroundColor: Colors.orange));
@@ -133,13 +135,18 @@ class _RosterScreenState extends State<RosterScreen> with SingleTickerProviderSt
         rows.add([doc.name, doc.role, doc.phone, doc.status, doc.lastUpdate, doc.department, doc.date, doc.day, doc.coverage]);
       }
       String csvData = const ListToCsvConverter().convert(rows);
-      final bytes = utf8.encode('\uFEFF$csvData'); 
-      final blob = html.Blob([bytes]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.AnchorElement(href: url)
-        ..setAttribute("download", "Roster_Export.csv")
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      final bytes = utf8.encode('\uFEFF$csvData');
+      
+      // ✅ كود الموبايل الجديد (Mobile Compatible)
+      try {
+        final directory = await getTemporaryDirectory();
+        final file = File('${directory.path}/Roster_Export.csv');
+        await file.writeAsBytes(bytes);
+        await Share.shareXFiles([XFile(file.path)], text: 'Hospital Roster');
+      } catch (e) {
+        print('Error saving file: $e');
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Roster downloaded successfully"), backgroundColor: Colors.green));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Export Error: $e"), backgroundColor: Colors.red));

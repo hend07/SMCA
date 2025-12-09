@@ -1,14 +1,33 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'dart:html' as html; // ✅ مكتبة الويب للتحميل
-
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:smart_alert_app/data/manager.dart';
 
 class LogsScreen extends StatelessWidget {
   const LogsScreen({super.key});
 
+  // ✅ دالة حفظ الملف (تعمل على الايفون والاندرويد)
+  Future<void> downloadLogs(String content) async {
+    try {
+      // 1. تحديد مكان الحفظ المؤقت في الايفون
+      final directory = await getTemporaryDirectory();
+      final path = '${directory.path}/logs_report.csv';
+      final file = File(path);
+
+      // 2. كتابة البيانات داخل الملف
+      await file.writeAsString(content);
+
+      // 3. مشاركة الملف ليتمكن المستخدم من حفظه أو إرساله
+      await Share.shareXFiles([XFile(path)], text: 'سجلات النظام');
+    } catch (e) {
+      print("Error saving logs: $e");
+    }
+  }
+
   // ✅ دالة التصدير المعدلة للويب
-  void _exportLogs(BuildContext context) {
+  Future<void> _exportLogs(BuildContext context) async {
     try {
       if (DataManager.logs.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No records to export")));
@@ -20,15 +39,16 @@ class LogsScreen extends StatelessWidget {
         csvData += "${log.date},${log.code},${log.room},${log.duration},${log.teamCount},${log.vitals}\n";
       }
 
-      // 🌐 طريقة التحميل للويب (Web Download)
+      // ✅ طريقة التحميل للموبايل (Mobile Download)
       final bytes = utf8.encode(csvData);
-      final blob = html.Blob([bytes]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute("download", "Medical_Logs_Archive.csv")
-        ..click();
-      
-      html.Url.revokeObjectUrl(url);
+      try {
+        final directory = await getTemporaryDirectory();
+        final file = File('${directory.path}/Medical_Logs_Archive.csv');
+        await file.writeAsBytes(bytes);
+        await Share.shareXFiles([XFile(file.path)], text: 'Medical Logs Report');
+      } catch (e) {
+        print('Error saving file: $e');
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Logs downloaded successfully 📥"), backgroundColor: Colors.green)
