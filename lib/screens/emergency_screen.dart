@@ -95,7 +95,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
     super.dispose();
   }
 
-<<<<<<< HEAD
   // ✅ دالة إرسال SMS الجماعية
   Future<void> sendAutoSMS(List<Doctor> docs) async {
     if (docs.isEmpty) return;
@@ -103,35 +102,12 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
     List<String> phones = docs.where((d) => d.phone.isNotEmpty).map((d) => d.phone.trim()).toList();
     if (phones.isEmpty) return;
 
-=======
-  // ✅ دالة إرسال SMS الجماعية (المعدلة)
-  Future<void> sendAutoSMS(List<Doctor> docs) async {
-    if (docs.isEmpty) return;
-    
-    // 1. تصفية الأرقام الفارغة وتنظيفها
-    List<String> phones = docs
-        .where((d) => d.phone.isNotEmpty)
-        .map((d) => d.phone.trim())
-        .toList();
-        
-    if (phones.isEmpty) return;
-
-    // نص الرسالة
->>>>>>> fb0fa17dee6424252fb5f02226272d8d0efc1ce8
     String message = "🚨 Code: $selectedCode\nLocation: ${roomController.text}\nURGENT RESPONSE REQUIRED!";
     String encodedMessage = Uri.encodeComponent(message);
 
     try {
-<<<<<<< HEAD
       String separator = (Theme.of(context).platform == TargetPlatform.android) ? ',' : '&'; 
       String recipients = phones.join(separator);
-=======
-      // 2. محاولة 1: إرسال جماعي (يعمل غالباً على أندرويد)
-      // الفاصل يعتمد على النظام، سنحاول استخدام الفاصلة لأنها الأكثر شيوعاً في الموبايل
-      String separator = (Theme.of(context).platform == TargetPlatform.android) ? ',' : '&'; 
-      String recipients = phones.join(separator);
-      
->>>>>>> fb0fa17dee6424252fb5f02226272d8d0efc1ce8
       final Uri smsUri = Uri.parse('sms:$recipients?body=$encodedMessage');
       
       if (await canLaunchUrl(smsUri)) {
@@ -140,10 +116,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
         throw 'Could not launch group SMS';
       }
     } catch (e) {
-<<<<<<< HEAD
-=======
-      // 3. محاولة 2: إذا فشل الجماعي، نعرض قائمة للمستخدم ليختار إرسال فردي
->>>>>>> fb0fa17dee6424252fb5f02226272d8d0efc1ce8
       if (mounted) {
         showDialog(
           context: context,
@@ -155,11 +127,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-<<<<<<< HEAD
                   const Text("Tap below to notify team manually:"),
-=======
-                  const Text("System restricted auto-group SMS. Please notify team manually:"),
->>>>>>> fb0fa17dee6424252fb5f02226272d8d0efc1ce8
                   const SizedBox(height: 10),
                   Expanded(
                     child: ListView.builder(
@@ -169,10 +137,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
                         return ListTile(
                           leading: const Icon(Icons.message, color: Colors.blue),
                           title: Text(docs[index].name),
-<<<<<<< HEAD
-=======
-                          subtitle: Text(docs[index].phone),
->>>>>>> fb0fa17dee6424252fb5f02226272d8d0efc1ce8
                           onTap: () async {
                              final Uri singleSms = Uri.parse('sms:${docs[index].phone}?body=$encodedMessage');
                              if (await canLaunchUrl(singleSms)) await launchUrl(singleSms);
@@ -289,7 +253,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> with SingleTickerProv
       });
     });
 
-    // استدعاء دالة الإرسال الجماعي المعدلة
     sendAutoSMS(responders);
   }
 
